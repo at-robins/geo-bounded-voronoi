@@ -2,7 +2,8 @@
 
 use std::borrow::Borrow;
 
-use geo::{BoundingRect, LineString, Polygon};
+use geo::{BooleanOps, BoundingRect, Contains, CoordsIter, LineString, Polygon};
+use serde::{Deserialize, Serialize};
 use voronoice::{BoundingBox, VoronoiBuilder};
 
 use crate::input::{BoundedPointSet, Bounds};
@@ -28,7 +29,7 @@ pub fn compute_voronoi<T: Borrow<BoundedPointSet>>(
             bound_point_set.diff_x() + bound_bounds.diff_x(),
             bound_point_set.diff_y() + bound_bounds.diff_y(),
         ))
-        .set_lloyd_relaxation_iterations(5)
+        // .set_lloyd_relaxation_iterations(5) // This alters the initial sites.
         .build()
         .ok_or("No Voronoi diagramm could be built for the specified point set.")?;
 
@@ -38,7 +39,10 @@ pub fn compute_voronoi<T: Borrow<BoundedPointSet>>(
             site: voronoi_point_to_array(cell.site_position()),
             cell: cell.iter_vertices().map(voronoi_point_to_array).collect(),
         })
-        .collect();
+        .try_fold(Vec::new(), |mut acc, cell| {
+            acc.push(cell.apply_bound(&bound)?);
+            Ok(acc)
+        })?;
     Ok(cells)
 }
 
@@ -65,6 +69,7 @@ fn center_polygon<T: Borrow<Polygon>>(polygon: T, x: f64, y: f64) -> Result<Poly
     Ok(Polygon::new(LineString::from(points), Vec::new()))
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BoundedVoronoiCell {
     site: [f64; 2],
     cell: Vec<[f64; 2]>,
@@ -72,4 +77,42 @@ pub struct BoundedVoronoiCell {
 
 fn voronoi_point_to_array(point: &voronoice::Point) -> [f64; 2] {
     [point.x, point.y]
+}
+
+impl BoundedVoronoiCell {
+    pub fn apply_bound<T: Borrow<Polygon>>(self, bound: T) -> Result<Self, &'static str> {
+        let centered_bound = center_polygon(bound, self.site[0], self.site[1])?;
+        let cell_polygon = Polygon::new(
+            LineString::from(
+                self.cell
+                    .into_iter()
+                    .map(|point| (point[0], point[1]))
+                    .collect::<Vec<(f64, f64)>>(),
+            ),
+            Vec::new(),
+        );
+        // Creates intersections between bounding polygon and the voronoi cell
+        // and selects the intersection that actually contains the original point.
+        let mut bounded_cell = None;
+        let geo_site = geo::Point::new(self.site[0], self.site[1]);
+        for intersection in cell_polygon.intersection(&centered_bound) {
+            if intersection.contains(&geo_site) {
+                bounded_cell = Some(
+                    intersection
+                        .coords_iter()
+                        .map(|coordinate| [coordinate.x, coordinate.y])
+                        .collect(),
+                );
+                break;
+            }
+        }
+
+        match bounded_cell {
+            Some(cell_points) => Ok(BoundedVoronoiCell {
+                site: self.site,
+                cell: cell_points,
+            }),
+            None => Err("No intersection could be found between the bound and the voronoi cell."),
+        }
+    }
 }

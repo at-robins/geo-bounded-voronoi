@@ -67,7 +67,7 @@ impl Point2D {
     /// * `x` - the x coordinate
     /// * `y` - the y coordinate
     pub fn new(x: f64, y: f64) -> Option<Self> {
-        if x.is_normal() || y.is_normal() {
+        if !x.is_normal() || !y.is_normal() {
             None
         } else {
             Some(Point2D { x, y })
