@@ -1,12 +1,12 @@
 [package]
 name = "geo-bounded-voronoi"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Planters"]
 
 [dependencies]
 approx = "0.5.1"
-clap = { version = "4.5.9", features = ["derive"] }
+clap = { version = "4.5.13", features = ["cargo", "derive"] }
 csv = "1.3.0"
 geo = "0.28.0"
 getset = "0.1.2"

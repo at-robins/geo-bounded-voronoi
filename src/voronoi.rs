@@ -8,6 +8,11 @@ use voronoice::{BoundingBox, VoronoiBuilder};
 
 use crate::input::{BoundedPointSet, Bounds};
 
+/// Computes the polygon-bound voronoi diagramm of the input point set.
+/// 
+/// # Parameters
+/// 
+/// * `bounded_point_set` - the input point set and bounding geometry
 pub fn compute_voronoi<T: Borrow<BoundedPointSet>>(
     bounded_point_set: T,
 ) -> Result<Vec<BoundedVoronoiCell>, &'static str> {
@@ -70,16 +75,26 @@ fn center_polygon<T: Borrow<Polygon>>(polygon: T, x: f64, y: f64) -> Result<Poly
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+/// A finite Voronoi diagramm cell.
 pub struct BoundedVoronoiCell {
+    /// The original point.
     site: [f64; 2],
+    /// The cell polygon.
     cell: Vec<[f64; 2]>,
 }
 
+/// Helper function to convert a [`Point`](voronoice::Point) to
+/// a two dimensional array.
 fn voronoi_point_to_array(point: &voronoice::Point) -> [f64; 2] {
     [point.x, point.y]
 }
 
 impl BoundedVoronoiCell {
+    /// Consumes the cell and returns the cell with the specified bound applied.
+    ///
+    /// # Parameters
+    ///
+    /// * `bound` - the polygon to apply as bound
     pub fn apply_bound<T: Borrow<Polygon>>(self, bound: T) -> Result<Self, &'static str> {
         let centered_bound = center_polygon(bound, self.site[0], self.site[1])?;
         let cell_polygon = Polygon::new(

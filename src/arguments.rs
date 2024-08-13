@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{crate_authors, Parser};
 use getset::{CopyGetters, Getters};
 
 /// A tool for generating the Voronoi diagramm of a point set bound by an arbitrary geometry.
 #[derive(Parser, CopyGetters, Getters, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author = crate_authors!("\n"), version, about, long_about = None)]
 pub struct CommandLineArguments {
     /// The path to the JSON file containing the point set and bounding geometry.
     ///

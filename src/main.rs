@@ -9,13 +9,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input_file = cl_args.point_set_file();
     let output_dir = cl_args.output_directory();
 
+    // Parses the input file.
     let point_set_input: BoundedPointSet =
         serde_json::from_reader(std::fs::File::open(input_file)?)?;
 
+    // Creats the Voronoi representation and saves it to the output file.
     let voronoi = compute_voronoi(point_set_input)?;
     let output_voronoi_path = output_dir.join("geo_bound_voronoi.json");
-
     serde_json::to_writer(std::fs::File::create(output_voronoi_path)?, &voronoi)?;
+    
     Ok(())
 }
 

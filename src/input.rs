@@ -49,10 +49,13 @@ impl BoundedPointSet {
     }
 }
 
+/// A 2-dimensional point.
 #[derive(Clone, Copy, CopyGetters, Debug, PartialEq, PartialOrd)]
 pub struct Point2D {
+    /// The x-coordinate.
     #[getset(get_copy = "pub")]
     x: f64,
+    /// The y-coordinate.
     #[getset(get_copy = "pub")]
     y: f64,
 }
@@ -64,8 +67,8 @@ impl Point2D {
     ///
     /// # Parameters
     ///
-    /// * `x` - the x coordinate
-    /// * `y` - the y coordinate
+    /// * `x` - the x-coordinate
+    /// * `y` - the y-coordinate
     pub fn new(x: f64, y: f64) -> Option<Self> {
         if !x.is_normal() || !y.is_normal() {
             None
@@ -101,19 +104,29 @@ impl From<Point2D> for voronoice::Point {
     }
 }
 
+/// The bounds / bounding rectangle of a polygon or point set.
 #[derive(Clone, Copy, CopyGetters, Debug, PartialEq, PartialOrd)]
 pub struct Bounds {
+    /// The minimum x-coordinate of the bounding rectangle.
     #[getset(get_copy = "pub")]
     min_x: f64,
+    /// The maximum x-coordinate of the bounding rectangle.
     #[getset(get_copy = "pub")]
     max_x: f64,
+    /// The minimum y-coordinate of the bounding rectangle.
     #[getset(get_copy = "pub")]
     min_y: f64,
+    /// The maximum y-coordinate of the bounding rectangle.
     #[getset(get_copy = "pub")]
     max_y: f64,
 }
 
 impl Bounds {
+    /// Returns the bounds of a [`Polygon`] if applicable.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `polygon` - the polygon to get the bounds for
     pub fn from_polygon<T: Borrow<Polygon>>(polygon: T) -> Option<Self> {
         polygon.borrow().bounding_rect().map(|bound| {
             let (min_x, min_y) = bound.min().x_y();
@@ -127,6 +140,11 @@ impl Bounds {
         })
     }
 
+    /// Returns the bounds of a [`Point2D`] set if applicable.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `point_set` - the point set to get the bounds for
     pub fn from_point_set<T: Borrow<HashSet<Point2D>>>(point_set: T) -> Option<Self> {
         let point_set: &HashSet<Point2D> = point_set.borrow();
         if point_set.is_empty() {
@@ -160,17 +178,22 @@ impl Bounds {
         }
     }
 
+    /// Returns the width of the bounding rectangle.
     pub fn diff_x(&self) -> f64 {
         self.max_x - self.min_x
     }
 
+    /// Returns the height of the bounding rectangle.
     pub fn diff_y(&self) -> f64 {
         self.max_y - self.min_y
     }
 
+    /// Returns the x-coordinate of the centre of the bounding rectangle.
     pub fn centre_x(&self) -> f64 {
         self.min_x() + self.diff_x() / 2.0
     }
+
+    /// Returns the y-coordinate of the centre of the bounding rectangle.
     pub fn centre_y(&self) -> f64 {
         self.min_y() + self.diff_y() / 2.0
     }
