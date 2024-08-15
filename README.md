@@ -19,7 +19,7 @@ geo-bounded-voronoi -h
 The utility can be run as follows:
 
 ```bash
-geo-bounded-voronoi -o path/to/output/directory path/to/input.json
+geo-bounded-voronoi -o path/to/output/directory/output.json path/to/input.json
 ```
 
 ## Input format
