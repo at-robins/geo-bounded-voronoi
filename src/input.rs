@@ -70,7 +70,7 @@ impl Point2D {
     /// * `x` - the x-coordinate
     /// * `y` - the y-coordinate
     pub fn new(x: f64, y: f64) -> Option<Self> {
-        if !x.is_normal() || !y.is_normal() {
+        if !x.is_finite() || x.is_subnormal() || !y.is_finite() || y.is_subnormal() {
             None
         } else {
             Some(Point2D { x, y })
@@ -123,9 +123,9 @@ pub struct Bounds {
 
 impl Bounds {
     /// Returns the bounds of a [`Polygon`] if applicable.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `polygon` - the polygon to get the bounds for
     pub fn from_polygon<T: Borrow<Polygon>>(polygon: T) -> Option<Self> {
         polygon.borrow().bounding_rect().map(|bound| {
@@ -141,9 +141,9 @@ impl Bounds {
     }
 
     /// Returns the bounds of a [`Point2D`] set if applicable.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `point_set` - the point set to get the bounds for
     pub fn from_point_set<T: Borrow<HashSet<Point2D>>>(point_set: T) -> Option<Self> {
         let point_set: &HashSet<Point2D> = point_set.borrow();
@@ -196,5 +196,192 @@ impl Bounds {
     /// Returns the y-coordinate of the centre of the bounding rectangle.
     pub fn centre_y(&self) -> f64 {
         self.min_y() + self.diff_y() / 2.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_ulps_eq;
+    use geo::CoordsIter;
+
+    use super::*;
+
+    #[test]
+    fn test_boundedpointset_bounding_polygon_valid() {
+        let poly_points = vec![
+            [-10.0, -20.0],
+            [0.0, 0.0],
+            [1.0, 15.0],
+            [234.0, -2.1],
+            [23.4, 0.1],
+            [-10.0, -20.0],
+        ];
+        let bps = BoundedPointSet {
+            point_set: vec![],
+            bound: poly_points.clone(),
+        };
+        let bounding_poly = bps.bounding_polygon().unwrap();
+
+        assert!(bounding_poly.interiors().is_empty());
+        assert_eq!(bounding_poly.exterior().coords_iter().count(), poly_points.len());
+        for (i, c) in bounding_poly.exterior_coords_iter().enumerate() {
+            assert_eq!(c.x, poly_points[i][0]);
+            assert_eq!(c.y, poly_points[i][1]);
+        }
+    }
+
+    #[test]
+    fn test_boundedpointset_bounding_polygon_invalid() {
+        // To few points for a proper polygon.
+        let poly_points = vec![[0.0, 0.0], [1.0, 1.0]];
+        let bps = BoundedPointSet {
+            point_set: vec![],
+            bound: poly_points,
+        };
+        assert!(bps.bounding_polygon().is_err())
+    }
+
+    #[test]
+    fn test_boundedpointset_point_set() {
+        // 4 unique values.
+        let point_set_duplicates = vec![
+            [0.0, 0.0],
+            [1.0, 1.0],
+            [1.00000000000001, 1.0],
+            [15.6, 19930.0],
+            [1.0, 1.0],
+        ];
+        let points: Vec<Point2D> = point_set_duplicates
+            .iter()
+            .map(|p| Point2D::new(p[0], p[1]).unwrap())
+            .collect();
+        let bps = BoundedPointSet {
+            point_set: point_set_duplicates,
+            bound: vec![],
+        };
+        let point_set_unique = bps.point_set();
+        assert_eq!(point_set_unique.len(), 4);
+        for point in points {
+            assert!(point_set_unique.contains(&point));
+        }
+    }
+
+    #[test]
+    fn test_boundedpointset_voronoi_point_set() {
+        // 4 unique values.
+        let point_set_duplicates = vec![
+            [0.0, 0.0],
+            [1.0, 1.0],
+            [1.00000000000001, 1.0],
+            [15.6, 19930.0],
+            [1.0, 1.0],
+        ];
+        let bps = BoundedPointSet {
+            point_set: point_set_duplicates.clone(),
+            bound: vec![],
+        };
+        let point_set_voronoi = bps.voronoi_point_set();
+        let point_set_voronoi_converted: Vec<[f64; 2]> =
+            point_set_voronoi.iter().map(|p| [p.x, p.y]).collect();
+        assert_eq!(point_set_voronoi.len(), 4);
+        assert_eq!(point_set_voronoi.len(), point_set_voronoi_converted.len());
+        for point in point_set_duplicates {
+            assert!(point_set_voronoi_converted.contains(&point));
+        }
+    }
+
+    #[test]
+    fn test_point2d_new_valid() {
+        let x = -10.0;
+        let y = 28.0;
+        let point = Point2D::new(x, y).unwrap();
+        assert_eq!(point.x(), x);
+        assert_eq!(point.y(), y);
+    }
+
+    #[test]
+    fn test_point2d_new_invalid() {
+        assert!(Point2D::new(f64::INFINITY, -10.0).is_none());
+        assert!(Point2D::new(f64::NEG_INFINITY, -10.0).is_none());
+        assert!(Point2D::new(f64::NAN, -10.0).is_none());
+        assert!(Point2D::new(1.0e-308_f64, -10.0).is_none());
+        assert!(Point2D::new(0.0, -10.0).is_some());
+        assert!(Point2D::new(10.0, f64::INFINITY).is_none());
+        assert!(Point2D::new(10.0, f64::NEG_INFINITY).is_none());
+        assert!(Point2D::new(10.0, f64::NAN).is_none());
+        assert!(Point2D::new(10.0, 1.0e-308_f64).is_none());
+        assert!(Point2D::new(10.0, 0.0).is_some());
+    }
+
+    #[test]
+    fn test_bounds_from_polygon_valid() {
+        let poly: Polygon = Polygon::new(
+            LineString::from(vec![
+                (-1.0, -2.0),
+                (2.0, -5.0),
+                (10.0, 20.0),
+                (15.0, 55.0),
+                (8.0, 4.0),
+                (-1.0, -2.0),
+            ]),
+            Vec::new(),
+        );
+        let bounds = Bounds::from_polygon(poly).unwrap();
+        assert_ulps_eq!(bounds.min_x(), -1.0);
+        assert_ulps_eq!(bounds.max_x(), 15.0);
+        assert_ulps_eq!(bounds.min_y(), -5.0);
+        assert_ulps_eq!(bounds.max_y(), 55.0);
+    }
+
+    #[test]
+    fn test_bounds_from_polygon_invalid() {
+        let poly: Polygon = Polygon::new(LineString::from(Vec::<(f64, f64)>::new()), Vec::new());
+        assert!(Bounds::from_polygon(poly).is_none());
+    }
+
+    #[test]
+    fn test_bounds_from_point_set_valid() {
+        let point_set: HashSet<Point2D> = vec![
+            (-1.0, -2.0),
+            (2.0, -5.0),
+            (10.0, 20.0),
+            (15.0, 55.0),
+            (8.0, 4.0),
+            (-1.0, -2.0),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point2D { x, y })
+        .collect();
+        let bounds = Bounds::from_point_set(point_set).unwrap();
+        assert_ulps_eq!(bounds.min_x(), -1.0);
+        assert_ulps_eq!(bounds.max_x(), 15.0);
+        assert_ulps_eq!(bounds.min_y(), -5.0);
+        assert_ulps_eq!(bounds.max_y(), 55.0);
+    }
+
+    #[test]
+    fn test_bounds_from_point_set_invalid() {
+        let bounds = Bounds::from_point_set(HashSet::new());
+        assert!(bounds.is_none())
+    }
+
+    #[test]
+    fn test_bounds_operations() {
+        let point_set: HashSet<Point2D> = vec![
+            (-1.0, -2.0),
+            (2.0, -5.0),
+            (10.0, 20.0),
+            (15.0, 55.0),
+            (8.0, 4.0),
+            (-1.0, -2.0),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point2D { x, y })
+        .collect();
+        let bounds = Bounds::from_point_set(point_set).unwrap();
+        assert_ulps_eq!(bounds.diff_x(), 16.0);
+        assert_ulps_eq!(bounds.diff_y(), 60.0);
+        assert_ulps_eq!(bounds.centre_x(), 7.0);
+        assert_ulps_eq!(bounds.centre_y(), 25.0);
     }
 }
